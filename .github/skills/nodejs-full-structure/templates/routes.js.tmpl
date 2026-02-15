@@ -1,0 +1,12 @@
+﻿const express = require('express');
+const {{entity}}Controller = require('../controllers/{{entity}}Controller');
+
+const router = express.Router();
+
+router.get('/', {{entity}}Controller.getAll);
+router.get('/:id', {{entity}}Controller.getById);
+router.post('/', {{entity}}Controller.create);
+router.put('/:id', {{entity}}Controller.update);
+router.delete('/:id', {{entity}}Controller.remove);
+
+module.exports = router;

@@ -1,0 +1,13 @@
+﻿function auth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace('Bearer ', '').trim();
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Placeholder for token verification.
+  return next();
+}
+
+module.exports = auth;
