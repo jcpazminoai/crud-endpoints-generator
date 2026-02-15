@@ -1,6 +1,6 @@
 name: Feedback
 description: Comparte tu experiencia usando el repo
-title: "Feedback: cuéntame tu experiencia "
+title: "Feedback: "
 labels:
   - question
 body:

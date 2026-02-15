@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline/promises');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const defaultSqlPath = path.join(repoRoot, 'docs', 'scripts', 'BD', 'BD_ToDoList.sql');
 const sqlPath = path.resolve(process.argv[2] || defaultSqlPath);
 const templatesDir = path.join(repoRoot, '.github', 'skills', 'nodejs-full-structure', 'templates');
+const ENV_TEMPLATE = [
+  'PORT=3000',
+  'DB_HOST=localhost',
+  'DB_PORT=3306',
+  'DB_USER=root',
+  'DB_PASSWORD=',
+  'DB_NAME=todo_list',
+  ''
+].join('\n');
 
 function readFileSafe(filePath) {
   return fs.readFileSync(filePath, 'utf8');
@@ -91,6 +101,32 @@ function parseColumns(blockBody) {
   return columns;
 }
 
+function parseDatabaseName(sql) {
+  const createDbRegex = /CREATE\s+DATABASE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-zA-Z0-9_]+)`?/i;
+  const useDbRegex = /USE\s+`?([a-zA-Z0-9_]+)`?\s*;?/i;
+  const createMatch = createDbRegex.exec(sql);
+  if (createMatch && createMatch[1]) return createMatch[1];
+  const useMatch = useDbRegex.exec(sql);
+  if (useMatch && useMatch[1]) return useMatch[1];
+  return null;
+}
+
+async function promptDatabaseName() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = await rl.question('Nombre de la base de datos: ');
+  rl.close();
+  return answer.trim();
+}
+
+function writeEnv(dbName) {
+  const envPath = path.join(repoRoot, '.env');
+  const content = ENV_TEMPLATE.replace(/DB_NAME=.*/i, `DB_NAME=${dbName}`);
+  fs.writeFileSync(envPath, content, 'utf8');
+}
+
 function renderTemplate(templatePath, replacements) {
   let content = readFileSafe(templatePath);
   Object.entries(replacements).forEach(([key, value]) => {
@@ -153,8 +189,7 @@ function renderReadme(tableNames) {
   lines.push('');
   lines.push('## Como instalarla');
   lines.push('1. Ubicate en la raiz del backend.');
-  lines.push('2. Copia `.env.example` a `.env` y completa credenciales.');
-  lines.push('3. Instala dependencias:');
+  lines.push('2. Instala dependencias:');
   lines.push('   ```');
   lines.push('   npm install');
   lines.push('   ```');
@@ -163,14 +198,6 @@ function renderReadme(tableNames) {
   lines.push('```');
   lines.push('npm run dev');
   lines.push('```');
-  lines.push('');
-  lines.push('## Variables de entorno necesarias');
-  lines.push('- `PORT`');
-  lines.push('- `DB_HOST`');
-  lines.push('- `DB_PORT`');
-  lines.push('- `DB_USER`');
-  lines.push('- `DB_PASSWORD`');
-  lines.push('- `DB_NAME`');
   lines.push('');
   lines.push('## Estructura del proyecto');
   lines.push('- `server.js`');
@@ -461,7 +488,7 @@ function generateForTable(table) {
   }
 }
 
-function main() {
+async function main() {
   if (!fs.existsSync(sqlPath)) {
     console.error(`SQL file not found: ${sqlPath}`);
     process.exit(1);
@@ -475,6 +502,20 @@ function main() {
   ensureDir(path.join(repoRoot, 'test'));
 
   const sql = readFileSafe(sqlPath);
+  if (sql.trim().length === 0) {
+    console.error('SQL file is empty.');
+    process.exit(1);
+  }
+
+  let dbName = parseDatabaseName(sql);
+  if (!dbName) {
+    dbName = await promptDatabaseName();
+  }
+  if (!dbName) {
+    console.error('Database name is required.');
+    process.exit(1);
+  }
+
   const blocks = parseCreateTableBlocks(sql);
   const tableNames = blocks.map(block => block.name);
 
@@ -491,7 +532,11 @@ function main() {
   tableNames.forEach(generateForTable);
   writeReadme(tableNames);
   writeOpenApi(tables);
+  writeEnv(dbName);
   console.log(`Generated structure for tables: ${tableNames.join(', ')}`);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

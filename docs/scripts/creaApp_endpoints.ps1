@@ -3,23 +3,34 @@
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path | Split-Path -Parent | Split-Path -Parent
 Set-Location $repoRoot
 
+$sqlPath = Join-Path $repoRoot "docs\scripts\BD\script_creacionBd.sql"
+if (!(Test-Path $sqlPath)) {
+  Write-Host "SQL file not found: $sqlPath" -ForegroundColor Red
+  exit 1
+}
+
+$sqlContent = Get-Content -Raw $sqlPath
+if ([string]::IsNullOrWhiteSpace($sqlContent)) {
+  Write-Host "SQL file is empty. cargue el script de creación de la base de datos en script_creacionBd.sql" -ForegroundColor Yellow
+  exit 0
+}
+
+$hasCreateTable = $sqlContent -match '(?i)\bCREATE\s+TABLE\b'
+if (-not $hasCreateTable) {
+  Write-Host "SQL file does not contain CREATE TABLE. No se ejecuta ningun comando." -ForegroundColor Yellow
+  exit 0
+}
+
 $cmds = @(
-  '@agent #nodejs-base-boilerplate: generar el código base del servidor Express',
+  'node docs/scripts/generate-base-boilerplate.js',
   'node docs/scripts/generate-full-structure-all.js docs/scripts/BD/script_creacionBd.sql',
   'node docs/scripts/generate-postman-collection.js docs/scripts/BD/script_creacionBd.sql'
 )
 
 foreach ($cmd in $cmds) {
-  if ($cmd -like '@agent*') {
-    Write-Host "AVISO: Este comando debe ejecutarse en el chat del agente:" -ForegroundColor Yellow
-    Write-Host $cmd -ForegroundColor Yellow
-    continue
-  }
-
   Write-Host "Ejecutando: $cmd" -ForegroundColor Cyan
-  $output = & powershell -NoProfile -Command $cmd 2>&1
+  & powershell -NoProfile -Command $cmd
   $exitCode = $LASTEXITCODE
-  if ($output) { $output | Write-Host }
   if ($exitCode -ne 0) {
     Write-Host "Error al ejecutar: $cmd" -ForegroundColor Red
     exit $exitCode
